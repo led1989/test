@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title></title>
+	<meta name="keywords" content="" />
+	<meta name="description" content="" />
+	<script type="text/javascript" src="jquery-1.12.3.js"></script>
+	<style>
+		.ld_block {
+			width: 600px;
+			margin: auto;
+		}
+		.ld_block .col {
+			float:left;
+			width: 300px;
+		}
+		#img_tmp {
+			width: 300px;
+			height: 300px;
+		}
+	</style>
+</head>
+<body>
+	<div class="ld_block">
+		<div class="col">
+			<input type="file" multiple id="from_pc">
+		</div>
+		<div class="col">
+			<input type="button" onclick="getResults()" value="Вырезать">
+		</div>
+		<img src="" alt="" id="img_crop">
+	</div>
+	<canvas id="panel" width="779" height="519"></canvas>
+	<script>
+		$('#from_pc').change(function () {
+			var input = $(this)[0];
+			if (input.files && input.files[0]) {
+				if(input.files[0].size>5000000){
+					alert('Картинка больше 5 мб ')
+					return false;
+				}
+				if (input.files[0].type.match('image.*')) {
+					var reader = new FileReader();
+					reader.onload = function (e) {
+						drowUplImg(e.target.result)
+					}
+					reader.readAsDataURL(input.files[0]);
+				} else {
+					console.log('ошибка, не изображение');
+				}
+			}
+		});
+
+
+
+		// Переменные
+		var canvas, ctx;
+		var image;
+		var iMouseX, iMouseY = 1;
+		var theSelection;
+
+		// Определяем конструктор Selection
+		function Selection(x, y, w, h){
+			this.x = x; // Начальное положение
+			this.y = y;
+			this.w = w; // и размер
+			this.h = h;
+
+			this.px = x; // Дополнительные переменные для вычисления при "перетаскивании" маркоеров
+			this.py = y;
+
+			this.csize = 6; // Размер маркеров
+			this.csizeh = 10; // Размер маркеров при наведении курсора
+
+			this.bHow = [false, false, false, false]; // Статусы наведения курсора
+			this.iCSize = [this.csize, this.csize, this.csize, this.csize]; // Размеры маркеров
+			this.bDrag = [false, false, false, false]; // Статусы перетаскивания
+			this.bDragAll = false; // Статус пермещения всего выделения
+		}
+
+		// Метод draw
+		Selection.prototype.draw = function(){
+
+			ctx.strokeStyle = '#000';
+			ctx.lineWidth = 2;
+			ctx.strokeRect(this.x, this.y, this.w, this.h);
+
+			// выводим часть оригинального изображения
+			if (this.w > 0 && this.h > 0) {
+				ctx.drawImage(image, this.x, this.y, this.w, this.h, this.x, this.y, this.w, this.h);
+			}
+
+		}
+
+		function drawScene() { // Осоновная функция drawScene
+			ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); // cОчищаем эолемент canvas
+
+			// Выводим оригинальное изображение
+			ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
+
+			// и затеняем его
+			ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+			ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+			// Выводим выделение
+			theSelection.draw();
+		}
+
+		function drowUplImg(imgSrc){
+			// Загружаем исходное изображение
+			image = new Image();
+			image.onload = function () {
+				$('#panel').attr('width', image.width)
+				$('#panel').attr('height', image.height)
+			}
+			image.src = imgSrc;
+
+			// Создаем элемент canvas и объект context
+			canvas = document.getElementById('panel');
+			ctx = canvas.getContext('2d');
+
+			// Создаем исходное выделение
+			theSelection = new Selection(200, 200, 200, 200);
+
+			$('#panel').mousemove(function(e) { // Привязываем событие мыши
+				var canvasOffset = $(canvas).offset();
+				iMouseX = Math.floor(e.pageX - canvasOffset.left);
+				iMouseY = Math.floor(e.pageY - canvasOffset.top);
+
+				// Для случая перемещения всего селектора
+				if (theSelection.bDragAll) {
+					theSelection.x = iMouseX - theSelection.px;
+					theSelection.y = iMouseY - theSelection.py;
+				}
+
+				for (i = 0; i < 4; i++) {
+					theSelection.bHow[i] = false;
+					theSelection.iCSize[i] = theSelection.csize;
+				}
+
+				drawScene();
+			});
+
+			$('#panel').mousedown(function(e) { // Привязываем событие мыши
+				var canvasOffset = $(canvas).offset();
+				iMouseX = Math.floor(e.pageX - canvasOffset.left);
+				iMouseY = Math.floor(e.pageY - canvasOffset.top);
+
+				theSelection.px = iMouseX - theSelection.x;
+				theSelection.py = iMouseY - theSelection.y;
+
+				if (iMouseX > theSelection.x + theSelection.csizeh && iMouseX < theSelection.x+theSelection.w - theSelection.csizeh &&
+						iMouseY > theSelection.y + theSelection.csizeh && iMouseY < theSelection.y+theSelection.h - theSelection.csizeh) {
+
+					theSelection.bDragAll = true;
+				}
+
+				for (i = 0; i < 4; i++) {
+					if (theSelection.bHow[i]) {
+						theSelection.bDrag[i] = true;
+					}
+				}
+			});
+
+			$('#panel').mouseup(function(e) { // Привязываем событие мыши
+				theSelection.bDragAll = false;
+
+				for (i = 0; i < 4; i++) {
+					theSelection.bDrag[i] = false;
+				}
+				theSelection.px = 0;
+				theSelection.py = 0;
+			});
+
+			drawScene();
+		};
+
+		function getResults() {
+			var temp_ctx, temp_canvas;
+			temp_canvas = document.createElement('canvas');
+			temp_ctx = temp_canvas.getContext('2d');
+			temp_canvas.width = theSelection.w;
+			temp_canvas.height = theSelection.h;
+			temp_ctx.drawImage(image, theSelection.x, theSelection.y, theSelection.w, theSelection.h, 0, 0, theSelection.w, theSelection.h);
+			var vData = temp_canvas.toDataURL();
+			$('#img_crop').attr('src', vData);
+
+		}
+
+	</script>
+
+</body>
+</html>
